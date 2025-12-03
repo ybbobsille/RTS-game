@@ -9,8 +9,6 @@ const bot_config = {
     start: {
         // the ideal minimum distance to keep other territories
         ideal_distance: 15,
-        // how far it will be from others when picking a new point
-        new_point_distance: 30,
         // how fast the willingness to stay decays after ideal distance (higher is more tolerent to close territories)
         distance_falloff: {   
             player: 0.7,
@@ -21,7 +19,7 @@ const bot_config = {
         // starting size of the bots territory
         starting_size:3.5,
         // how fast it will grow loyal to its position and fight for it
-        position_loyalty: 0.1,
+        position_loyalty: 0.2,
         // how fast it will gorw stressful of its current position, and more willing to give it up
         position_stress: 0.15,
         // how fast it will lose stress when there is no-one close
@@ -64,19 +62,11 @@ class Bot_Handler {
 
     async Tick_Starting_Location() {
         const Pick_New_Target_Location = () => {
-            const Get_Closes_Territory_Distance = () => {
-                const distances = bot_placements.map(p => engine.Distance(p[0], [1], this.current_location[0], this.current_location[1]))
-                const ordered = distances.slice().sort((a, b) => a - b)
-                var index = 0
-                if (ordered[index] < 0.1) index = 1
-                return ordered[index]
-            }
             var map_size = engine.game_settings.map.size
             var start_size = bot_config.start.starting_size
             this.target_location = null
             while (!this.target_location
                 || engine.game_settings.map.get(this.target_location[0], this.target_location[1])?.owner == "void"
-                || Get_Closes_Territory_Distance() < bot_config.start.new_point_distance
             ) {
                 this.target_location = [
                     engine.Clamp(Math.round(Math.random() * map_size[0]), start_size, map_size[0] - start_size),
