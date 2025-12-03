@@ -14,8 +14,6 @@ const bot_config = {
             player: 0.7,
             bot: 0.9
         },
-        // how far it is willing to move away from the ideal place
-        max_deviation: 20,
         // starting size of the bots territory
         starting_size:3.5,
         // how fast it will grow loyal to its position and fight for it
