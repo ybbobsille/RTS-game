@@ -1,0 +1,69 @@
+var Base64 = {
+
+    ALPHA: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/',
+    encode: function (value) {
+
+        if (typeof(value) !== 'number') {
+            throw 'Value is not number!';
+        }
+
+        var result = '', mod;
+        do {
+            mod = value % 64;
+            result = Base64.ALPHA.charAt(mod) + result;
+            value = Math.floor(value / 64);
+        } while(value > 0);
+
+        return result;
+    },
+
+    decode: function (value) {
+
+        var result = 0;
+        for (var i = 0, len = value.length; i < len; i++) {
+            result *= 64;
+            result += Base64.ALPHA.indexOf(value[i]);
+        }
+
+        return result;
+    },
+};
+
+const log = (msg) => {
+    console.log("signal:", msg)
+    document.getElementById("log").value += msg + "\n";
+};
+
+function Join_Lobby(code) {
+    const socket = window.socket
+    window.room = code
+    socket.send(JSON.stringify({user_join_room: code}))
+}
+
+function Connect(code) {
+
+    const ip = code.split("_")[0].split("-").map(p => Base64.decode(p)).join(".")
+    const port = code.split("_")[1].split("").map(p => Base64.decode(p)).join("")
+
+    log(`Connecting to Ip: ${ip}:${port}`)
+
+    const socket = new WebSocket(`ws://${ip}:${port}`);
+    window.socket = socket
+
+    socket.onmessage = async (event) => {
+        const msg = JSON.parse(event.data);
+
+        if (msg.room_start) {
+            Connect_To_Host(socket)
+        }
+        if (msg.user_confitmed) {
+            window.user_id = msg.user_confitmed
+        }
+
+        log("incoming messsage: " + JSON.stringify(msg))
+    };
+
+    socket.onopen = async () => {
+        socket.send(JSON.stringify({register_user:true}))
+    }
+}

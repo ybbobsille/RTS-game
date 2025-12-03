@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+    <input type="text" id="Connection_Code" placeholder="Input Connection Code..." value="B/-A-A-B_IAIA">
+    <button id="connectBtn" onclick="Connect(document.querySelector('#Connection_Code').value)">Connect</button>
+    <input type="text" id="Room_Code" placeholder="Input Room Code...">
+    <button id="JoinBtn" onclick="Join_Lobby(document.querySelector('#Room_Code').value)">Join</button>
+    <textarea id="log" rows="10" cols="50"></textarea>
+    <textarea id="RTClog" rows="10" cols="50"></textarea>
+
+    <script src="./signal.js" inline></script>
+    <script src="./RTC.js" inline></script>
+</body>
+
+</html>
