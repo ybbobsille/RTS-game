@@ -163,8 +163,8 @@ class Bot_Handler {
 }
 
 function calculate_deviation(deviation) {
-    y = deviation
-    x = Math.random() * 2 - 1 // random -1 to 1 value
+    var y = deviation
+    var x = Math.random() * 2 - 1 // random -1 to 1 value
     return Math.pow(x, 4) * y // devalues low numbers to make high deviation uncommon
 }
 
