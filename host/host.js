@@ -39,6 +39,7 @@ const users = []
 const users_connections = {}
 
 async function Game_Loop() {
+    global.tick_duration = 0
     global.tick_index = 0
     global.users = users
     global.users_connections = users_connections
@@ -79,6 +80,7 @@ async function Game_Loop() {
     })
 
     const internal_tick = async () => {
+        const tick_start = Date.now()
         global.tick_index += 1
         try {
             for (var script of scripts) {
@@ -92,8 +94,9 @@ async function Game_Loop() {
         catch (e) {
             console.log(e)
         }
+        global.tick_duration = Date.now() - tick_start
     }
-    const tick = setInterval(internal_tick, 100)
+    const tick = setInterval(internal_tick, 1000 / global.Game_Settings.tick_rate)
     setTimeout(() => {
         console.log("Game Started!")
         global.game_started = true
@@ -212,7 +215,8 @@ global.Game_Settings = {
     map: "basic",
     bots:true,
     bot_count:10,
-    start_counter:10
+    start_counter:10,
+    tick_rate:10
 }
 
 Game_Loop()

@@ -157,6 +157,9 @@ export function _render_to_file(fp) {
 }
 
 export function tick() {
+    if (global.tick_duration > (1000 / engine.tick_rate) * 0.8) {
+        console.warn("Warning! tick duration is abnormaly high!")
+    }
 }
 
 export function init() {

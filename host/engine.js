@@ -170,8 +170,10 @@ const engine = {
         bot_count: 10
     },
     territories: {},
+    tick_rate: 0,
 
     Register_Territory: (name) => {
+        // Generates a uniqe id and color for each territory
         var id = null
         const Chars = "qwertyuiopasdfghjklzxcvbnmm"
         while (id == null) {
@@ -189,6 +191,8 @@ const engine = {
         return id
     },
     Vcheck: (expected, terminal = true) => {
+        // checks if the provided version is the same as the engine version.
+        // - terminal: whether to through an error if its incorrect.
         if (expected != engine.version.name) {
             if (terminal) throw `Version mismatch for module '${engine.package_name}'`
             else return false
@@ -197,15 +201,19 @@ const engine = {
         return true
     },
     Is_Started() {
+        // returns true if the game has started.
         return global.game_started
     },
     Clamp(value, min, max) {
+        // clamps value between min and max
         return Math.min(max, Math.max(min, value))
     },
     Distance(x1, y1, x2, y2) {
+        // returns the distance from (x1, y1) to (x2, y2)
         return Math.sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2))
     },
     Tick_Index() {
+        // returns the current tick index (number of ticks since start)
         return global.tick_index
     },
 
@@ -216,5 +224,6 @@ const engine = {
 engine.users = global.users
 engine.user_connections = global.users_connections
 engine.game_settings = global.Game_Settings
+engine.tick_rate = global.Game_Settings.tick_rate
 
 export default engine
