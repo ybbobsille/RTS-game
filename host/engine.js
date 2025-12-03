@@ -116,6 +116,14 @@ class Color {
     }
 }
 
+class Territory_Manager {
+    constructor (land, territory) {
+        this.land = land
+        this.territory = territory
+        this.color = engine.territories[territory].color
+    }
+}
+
 function Generate_Territory_Color() {
     const used = Object.values(engine.territories).map(t => t.color.hsla[0]);
 
@@ -197,8 +205,12 @@ const engine = {
     Distance(x1, y1, x2, y2) {
         return Math.sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2))
     },
+    Tick_Index() {
+        return global.tick_index
+    },
 
-    color: Color
+    color: Color,
+    Territory_Manager: Territory_Manager
 }
 
 engine.users = global.users

@@ -39,6 +39,7 @@ const users = []
 const users_connections = {}
 
 async function Game_Loop() {
+    global.tick_index = 0
     global.users = users
     global.users_connections = users_connections
     console.log("Loading scripts...")
@@ -78,6 +79,7 @@ async function Game_Loop() {
     })
 
     const internal_tick = async () => {
+        global.tick_index += 1
         try {
             for (var script of scripts) {
                 if (typeof script.tick == "function") {
@@ -92,6 +94,10 @@ async function Game_Loop() {
         }
     }
     const tick = setInterval(internal_tick, 100)
+    setTimeout(() => {
+        console.log("Game Started!")
+        global.game_started = true
+    }, global.Game_Settings.start_counter * 1000)
 }
 
 async function Handle_RTC_Data(event) {
@@ -205,7 +211,8 @@ function start({ ip, port }) {
 global.Game_Settings = {
     map: "basic",
     bots:true,
-    bot_count:10
+    bot_count:10,
+    start_counter:10
 }
 
 Game_Loop()

@@ -5,6 +5,11 @@ engine.Vcheck("1.0.0")
 const bots = []
 var bot_placements = null
 const bot_config = {
+    /* 
+    deviation:
+        currently calculated by taking a random -1 to 1 value as x, and the max deviation as y: x⁴ * y
+    */
+
     // related to the pre-game phase where you select your location
     start: {
         // the ideal minimum distance to keep other territories
@@ -76,8 +81,10 @@ class Bot_Handler {
             this.position_stress = 0
             this.position_loyalty = 0
             this.selected_pixels.forEach(pixel => {
-                pixel.filter = null
-                pixel.owner = pixel.owner == this.territory ? null : pixel.owner
+                if (pixel.owner == this.territory) {
+                    pixel.filter = null
+                    pixel.owner = "wild"
+                }
             });
             this.current_location = [x, y]
             this.selected_pixels = engine.game_settings.map.get_Circle(x, y, bot_config.start.starting_size)
@@ -94,6 +101,7 @@ class Bot_Handler {
 
         if (this.current_location) {
             var willingness = bot_config.start.base_willingness
+            //TODO: include player pos's in the relitvent placements
             const relivent_placments = bot_placements.filter(p => engine.Distance(p[0], p[1], this.current_location[0], this.current_location[1]) < bot_config.start.ideal_distance)
             
             relivent_placments.forEach(point => {
@@ -101,7 +109,7 @@ class Bot_Handler {
                 // 0 - 1
                 const score = (Math.max(-distance + bot_config.start.ideal_distance, 0) / bot_config.start.ideal_distance)
 
-                willingness -= score * bot_config.start.distance_falloff.bot
+                willingness -= score * (point[2] == "bot" ? bot_config.start.distance_falloff.bot : bot_config.start.distance_falloff.player)
             })
 
             if (willingness != 7.5) {
@@ -122,27 +130,52 @@ class Bot_Handler {
         else {
             Selection_Location(this.target_location[0], this.target_location[1])
         }
+
+        // every 5th tick try to reclaim land within the circle
+        if (engine.Tick_Index() % 5 == 0) {
+            this.selected_pixels.forEach(pixel => {
+                if (pixel.owner == "wild") {
+                    pixel.owner = this.territory
+                    pixel.filter = engine.territories[this.territory].color
+                }
+            })
+        }
     }
 
     async Tick_Game() {
+        if (this.current_location) {
+            //clean up starting data and init game data
+            this.land = new engine.Territory_Manager(this.selected_pixels, this.territory)
 
+            delete this.selected_pixels
+            delete this.target_location
+            delete this.current_location
+            delete this.position_loyalty
+            delete this.position_stress
+
+            this.respect = {
+                player: bot_config.General.respect.player + calculate_deviation(bot_config.General.respect_deviation.player),
+                bot: bot_config.General.respect.bot + calculate_deviation(bot_config.General.respect_deviation.bot)
+            }
+            this.patience = bot_config.General.patience + calculate_deviation(bot_config.General.patience_deviation)
+        }
     }
 }
 
 function calculate_deviation(deviation) {
     y = deviation
     x = Math.random() * 2 - 1 // random -1 to 1 value
-    return Math.pow(x, 4) * y
+    return Math.pow(x, 4) * y // devalues low numbers to make high deviation uncommon
 }
 
 export async function tick() {
     if (engine.Is_Started()) {
-        await Promise.all(
-            bots.forEach(b => b.Tick_Game())
-        )
+        for (var bot of bots) {
+            await bot.Tick_Game()
+        }
     }
     else {
-        bot_placements = bots.map(bot => bot.current_location).filter(p => p != null)//TODO: include player positions
+        bot_placements = bots.map(bot => [...(bot.current_location ? bot.current_location : [null]), "bot"]).filter(p => p != null)
         for (var bot of bots) {
             await bot.Tick_Starting_Location()
         }
