@@ -150,6 +150,62 @@ class Map_Handler {
     }
 }
 
+class Territory_Manager {
+    constructor (land, territory) {
+        this.land = land
+        this.territory = territory
+        this.color = engine.public.territories[territory].color
+    }
+}
+
+function Generate_Territory_Color() {
+    const used = Object.values(engine.public.territories).map(t => t.color.hsla[0]);
+
+    if (used.length === 0) {
+        return engine.color.From_HSLA(0, 45, 70, 50);
+    }
+
+    const sorted = used.slice().sort((a, b) => a - b);
+
+    const points = [...sorted, sorted[0] + 360];
+
+    let bestGap = -1;
+    let bestHue = 0;
+
+    for (let i = 0; i < points.length - 1; i++) {
+        const a = points[i];
+        const b = points[i + 1];
+        const gap = b - a;
+
+        if (gap > bestGap) {
+            bestGap = gap;
+            bestHue = a + gap / 2;
+        }
+    }
+
+    bestHue = bestHue % 360;
+
+    return engine.color.From_HSLA(bestHue, 45, 70, 50);
+}
+
+function Register_Territory(name) {
+    // Generates a uniqe id and color for each territory
+    var id = null
+    const Chars = "qwertyuiopasdfghjklzxcvbnmm"
+    while (id == null) {
+        id = ""
+        for (var i = 0; i < 10; i++) id += Chars.charAt(Math.round(Math.random() * Chars.length))
+        if (engine.public.territories[id]) {
+            id = null
+        }
+    }
+    engine.public.territories[id] = {
+        name:name,
+        color: Generate_Territory_Color()
+    }
+    return id
+}
+
 export function _render_to_file(fp) {
     const data = engine.game_settings.map._dump_bmp()
     fs.writeFileSync(fp, data.data)
@@ -163,4 +219,13 @@ export function tick() {
 
 export function init() {
     engine.game_settings.map = new Map_Handler(engine.game_settings.map)
+    engine.public.map = engine.game_settings.map
+}
+
+engine.public = {
+    territories:{},
+
+    Register_Territory,
+
+    Territory_Manager: Territory_Manager
 }

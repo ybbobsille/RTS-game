@@ -116,44 +116,6 @@ class Color {
     }
 }
 
-class Territory_Manager {
-    constructor (land, territory) {
-        this.land = land
-        this.territory = territory
-        this.color = engine.territories[territory].color
-    }
-}
-
-function Generate_Territory_Color() {
-    const used = Object.values(engine.territories).map(t => t.color.hsla[0]);
-
-    if (used.length === 0) {
-        return Color.From_HSLA(0, 45, 70, 50);
-    }
-
-    const sorted = used.slice().sort((a, b) => a - b);
-
-    const points = [...sorted, sorted[0] + 360];
-
-    let bestGap = -1;
-    let bestHue = 0;
-
-    for (let i = 0; i < points.length - 1; i++) {
-        const a = points[i];
-        const b = points[i + 1];
-        const gap = b - a;
-
-        if (gap > bestGap) {
-            bestGap = gap;
-            bestHue = a + gap / 2;
-        }
-    }
-
-    bestHue = bestHue % 360;
-
-    return Color.From_HSLA(bestHue, 45, 70, 50);
-}
-
 const engine = {
     version: {
         name: "1.0.0",
@@ -165,35 +127,13 @@ const engine = {
     package_name: "",
     user_connections: [],
     game_settings: {
-        map: null,
-        bots: false,
-        bot_count: 10
     },
-    territories: {},
     tick_rate: 0,
 
     public: {
         // put any values you wish to share with other packages here
     },
 
-    Register_Territory: (name) => {
-        // Generates a uniqe id and color for each territory
-        var id = null
-        const Chars = "qwertyuiopasdfghjklzxcvbnmm"
-        while (id == null) {
-            id = ""
-            for (var i = 0; i < 10; i++) id += Chars.charAt(Math.round(Math.random() * Chars.length))
-            if (engine.territories[id]) {
-                id = null
-            }
-        }
-
-        engine.territories[id] = {
-            name:name,
-            color: Generate_Territory_Color()
-        }
-        return id
-    },
     Vcheck: (expected, terminal = true) => {
         // checks if the provided version is the same as the engine version.
         // - terminal: whether to through an error if its incorrect.
@@ -230,10 +170,10 @@ const engine = {
 
         engine.package_name = package_name
         engine.package_version = package_version
-        global.engine_store[package_name] = { engine, version:package_version}
-        const engines = []
+        global.engine_store[package_name] = { engine, version:package_version }
+        const engines = {}
         for (var name of Object.keys(dependancies)) {
-            engines.push(this.Get_Package(name, dependancies[name]))
+            engines[name] = engine.Get_Package(name, dependancies[name])
         }
 
         return engines
@@ -248,11 +188,10 @@ const engine = {
         const valid_version = typeof package_version == "string" ? real_version == package_version : package_version.includes(real_version)
         if (!valid_version) throw `Package '${package_name}' is version '${real_version}'. Requested version '${package_version}'`
 
-        global.engine_store[package_name].engine.public
+        return global.engine_store[package_name].engine.public
     },
 
-    color: Color,
-    Territory_Manager: Territory_Manager
+    color: Color
 }
 
 engine.users = global.users

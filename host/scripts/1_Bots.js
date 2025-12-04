@@ -1,6 +1,6 @@
 import engine from "../engine.js"
-engine.Register("Bots", "1.0.0")
 engine.Vcheck("1.0.0")
+const { Main } = engine.Register("Bots", "1.0.0", {"Main":"1.0.0"})
 
 const bots = []
 var bot_placements = null
@@ -55,7 +55,7 @@ const bot_config = {
 class Bot_Handler {
     constructor(name) {
         this.name = name
-        this.territory = engine.Register_Territory(name)
+        this.territory = Main.Register_Territory(name)
         this.selected_pixels = []
         this.target_location = null
         this.current_location = null
@@ -91,7 +91,7 @@ class Bot_Handler {
             //console.log(this.selected_pixels)
             this.selected_pixels.forEach(pixel => {
                 if (pixel.owner != "void") {
-                    pixel.filter = engine.territories[this.territory].color
+                    pixel.filter = Main.territories[this.territory].color
                     pixel.owner = this.territory
                 }
             });
@@ -136,7 +136,7 @@ class Bot_Handler {
             this.selected_pixels.forEach(pixel => {
                 if (pixel.owner == "wild") {
                     pixel.owner = this.territory
-                    pixel.filter = engine.territories[this.territory].color
+                    pixel.filter = Main.territories[this.territory].color
                 }
             })
         }
@@ -145,7 +145,7 @@ class Bot_Handler {
     async Tick_Game() {
         if (this.current_location) {
             //clean up starting data and init game data
-            this.land = new engine.Territory_Manager(this.selected_pixels, this.territory)
+            this.land = new Main.Territory_Manager(this.selected_pixels, this.territory)
 
             delete this.selected_pixels
             delete this.target_location
