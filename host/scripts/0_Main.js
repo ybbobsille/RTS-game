@@ -207,7 +207,7 @@ function Register_Territory(name) {
 }
 
 export function _render_to_file(fp) {
-    const data = engine.game_settings.map._dump_bmp()
+    const data = engine.public.map._dump_bmp()
     fs.writeFileSync(fp, data.data)
 }
 
@@ -218,11 +218,15 @@ export function tick() {
 }
 
 export function init() {
-    engine.game_settings.map = new Map_Handler(engine.game_settings.map)
-    engine.public.map = engine.game_settings.map
+    engine.public.map = new Map_Handler(engine.public.settings.map)
 }
 
 engine.public = {
+    settings: {
+        map: "basic",
+        bots:true,
+        bot_count:10,
+    },
     territories:{},
 
     Register_Territory,

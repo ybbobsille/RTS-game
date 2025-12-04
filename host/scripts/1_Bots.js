@@ -65,11 +65,11 @@ class Bot_Handler {
 
     async Tick_Starting_Location() {
         const Pick_New_Target_Location = () => {
-            var map_size = engine.game_settings.map.size
+            var map_size = Main.map.size
             var start_size = bot_config.start.starting_size
             this.target_location = null
             while (!this.target_location
-                || engine.game_settings.map.get(this.target_location[0], this.target_location[1])?.owner == "void"
+                || Main.map.get(this.target_location[0], this.target_location[1])?.owner == "void"
             ) {
                 this.target_location = [
                     engine.Clamp(Math.round(Math.random() * map_size[0]), start_size, map_size[0] - start_size),
@@ -87,8 +87,8 @@ class Bot_Handler {
                 }
             });
             this.current_location = [x, y]
-            this.selected_pixels = engine.game_settings.map.get_Circle(x, y, bot_config.start.starting_size)
-            //console.log(this.selected_pixels)
+            this.selected_pixels = Main.map.get_Circle(x, y, bot_config.start.starting_size)
+            
             this.selected_pixels.forEach(pixel => {
                 if (pixel.owner != "void") {
                     pixel.filter = Main.territories[this.territory].color
@@ -183,9 +183,9 @@ export async function tick() {
 }
 
 export function init() {
-    if (!engine.game_settings.bots || engine.game_settings.bot_count == 0) return
+    if (!Main.settings.bots || Main.settings.bot_count == 0) return
 
-    for (var i=0; i<engine.game_settings.bot_count; i++) {
+    for (var i=0; i<Main.settings.bot_count; i++) {
         bots.push(new Bot_Handler(`Bot_${i}`))
     }
 }

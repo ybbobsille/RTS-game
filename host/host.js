@@ -212,9 +212,6 @@ function start({ ip, port }) {
 }
 
 global.Game_Settings = {
-    map: "basic",
-    bots:true,
-    bot_count:10,
     start_counter:10,
     tick_rate:10
 }
