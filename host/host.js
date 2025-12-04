@@ -42,7 +42,6 @@ async function Game_Loop() {
     global.tick_index = 0
     global.users = users
     global.users_connections = users_connections
-    global.packages = []
     global.engine_store = {}
     console.log("Loading scripts...")
     var files = fs.readdirSync("./scripts")
@@ -221,7 +220,7 @@ global.Game_Settings = {
 }
 
 Game_Loop()
-    .catch(e => console.log(e))
+    .catch(e => console.error(e))
 //start(Handle_Answer("B/-A-A-B_IAIA"))
 //const rl = readline.createInterface({
 //    input: process.stdin,

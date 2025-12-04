@@ -220,29 +220,35 @@ const engine = {
         // returns the current tick index (number of ticks since start)
         return global.tick_index
     },
-    Register(package_name, dependancies = []) {
-        // used to make your script accessable to other packages
-        engine.package_name = package_name
-        global.engine_store[package_name] = engine
-        global.packages.push(package_name)
-        const engines = []
-        for (var name of dependancies) {
-            if (!global.packages.includees(name)) {
-                throw `Package '${package_name}' is missing dependancy '${name}'! Are the packages loading in the right order?`
-            }
+    Register(package_name, package_version, dependancies = {}) {
+        // used to make your script accessable to other packages (not required)
+        /*
+        dependancies: {
+            "<package_name>": str | array<str>
+        }
+        */
 
-            engines.push(global.AbortController.engine_store[name].public)
+        engine.package_name = package_name
+        engine.package_version = package_version
+        global.engine_store[package_name] = { engine, version:package_version}
+        const engines = []
+        for (var name of Object.keys(dependancies)) {
+            engines.push(this.Get_Package(name, dependancies[name]))
         }
 
         return engines
     },
-    Get_Package(package_name) {
+    Get_Package(package_name, package_version) {
         // get a package based on the name
-        if (!global.packages.includees(package_name)) {
-            throw `Package '${package_name}' is not loaded! Is it installed?`
-        }
+        const exists = Object.keys(global.engine_store).includes(package_name)
+        if (!exists) throw `Package '${package_name}' is not loaded! Is it installed? And is the install order correct?`
 
-        global.AbortController.engine_store[package_name].public
+        const real_version = global.engine_store[package_name].version
+
+        const valid_version = typeof package_version == "string" ? real_version == package_version : package_version.includes(real_version)
+        if (!valid_version) throw `Package '${package_name}' is version '${real_version}'. Requested version '${package_version}'`
+
+        global.engine_store[package_name].engine.public
     },
 
     color: Color,

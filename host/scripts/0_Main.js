@@ -1,7 +1,7 @@
 import engine from "../engine.js"
 import bmp from "bmp-js"
 import fs from "fs"
-engine.Register("Main")
+engine.Register("Main", "1.0.0")
 engine.Vcheck("1.0.0")
 
 class Map_Pixel extends engine.color {

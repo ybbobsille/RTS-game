@@ -1,5 +1,5 @@
 import engine from "../engine.js"
-dependancies = engine.Register("Bots", ["Main"])
+engine.Register("Bots", "1.0.0")
 engine.Vcheck("1.0.0")
 
 const bots = []
