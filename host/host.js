@@ -1,5 +1,4 @@
 import wrtc from "@roamhq/wrtc";
-import path, { resolve } from "node:path";
 import readline from "node:readline";
 import { WebSocket } from "ws";
 import fs from "node:fs";
@@ -43,6 +42,8 @@ async function Game_Loop() {
     global.tick_index = 0
     global.users = users
     global.users_connections = users_connections
+    global.packages = []
+    global.engine_store = {}
     console.log("Loading scripts...")
     var files = fs.readdirSync("./scripts")
     console.log("Scripts found:", files.join(", "))

@@ -172,6 +172,10 @@ const engine = {
     territories: {},
     tick_rate: 0,
 
+    public: {
+        // put any values you wish to share with other packages here
+    },
+
     Register_Territory: (name) => {
         // Generates a uniqe id and color for each territory
         var id = null
@@ -215,6 +219,30 @@ const engine = {
     Tick_Index() {
         // returns the current tick index (number of ticks since start)
         return global.tick_index
+    },
+    Register(package_name, dependancies = []) {
+        // used to make your script accessable to other packages
+        engine.package_name = package_name
+        global.engine_store[package_name] = engine
+        global.packages.push(package_name)
+        const engines = []
+        for (var name of dependancies) {
+            if (!global.packages.includees(name)) {
+                throw `Package '${package_name}' is missing dependancy '${name}'! Are the packages loading in the right order?`
+            }
+
+            engines.push(global.AbortController.engine_store[name].public)
+        }
+
+        return engines
+    },
+    Get_Package(package_name) {
+        // get a package based on the name
+        if (!global.packages.includees(package_name)) {
+            throw `Package '${package_name}' is not loaded! Is it installed?`
+        }
+
+        global.AbortController.engine_store[package_name].public
     },
 
     color: Color,

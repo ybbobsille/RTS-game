@@ -1,7 +1,7 @@
 import engine from "../engine.js"
 import bmp from "bmp-js"
 import fs from "fs"
-engine.package_name = "Main"
+engine.Register("Main")
 engine.Vcheck("1.0.0")
 
 class Map_Pixel extends engine.color {
@@ -149,7 +149,6 @@ class Map_Handler {
         return bmpBuffer
     }
 }
-
 
 export function _render_to_file(fp) {
     const data = engine.game_settings.map._dump_bmp()
