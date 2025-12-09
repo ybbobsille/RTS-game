@@ -1,3 +1,4 @@
+import { config } from "node:process"
 import engine from "../engine.js"
 engine.Vcheck("1.0.0")
 const { Main } = engine.Register("Bots", "1.0.0", {"Main":"1.0.0"})
@@ -30,7 +31,9 @@ const bot_config = {
         // when the bot will start feeling stress when the willingness is below this point
         stress_point: 7.5,
         // the initial value for willingness
-        base_willingness: 10
+        base_willingness: 10,
+        // the starting troop count
+        troop_count: 500
     },
     // related to the main phase of the game
     General: {
@@ -145,7 +148,7 @@ class Bot_Handler {
     async Tick_Game() {
         if (this.current_location) {
             //clean up starting data and init game data
-            this.land = new Main.Territory_Manager(this.selected_pixels, this.territory)
+            this.land = new Main.Territory_Manager(this.selected_pixels, this.territory, bot_config.start.troop_count)
 
             delete this.selected_pixels
             delete this.target_location
@@ -153,11 +156,21 @@ class Bot_Handler {
             delete this.position_loyalty
             delete this.position_stress
 
+            this.phase = "initial"
             this.respect = {
                 player: bot_config.General.respect.player + calculate_deviation(bot_config.General.respect_deviation.player),
                 bot: bot_config.General.respect.bot + calculate_deviation(bot_config.General.respect_deviation.bot)
             }
             this.patience = bot_config.General.patience + calculate_deviation(bot_config.General.patience_deviation)
+        }
+
+        if (this.phase == "initial") {
+            if (this.land.bordering("wild")) {
+                if (!this.land.attacking("wild") && engine.Chance(this.patience * 30)) this.land.attack("wild", 20)
+            }
+            else {
+                this.phase == "early"
+            }
         }
     }
 }

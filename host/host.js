@@ -37,6 +37,12 @@ var room_id = null
 const users = []
 const users_connections = {}
 
+function Ui_Setup() {
+    // this function will run on the client and will setup the system to allow each script to use there own scripts.
+    // the reason i do it this way is to alow old clients to load new games.
+
+}
+
 async function Game_Loop() {
     global.tick_duration = 0
     global.tick_index = 0
@@ -50,6 +56,7 @@ async function Game_Loop() {
     for (var file of files) {
         const fp = "./scripts/" + file
         const module = await import(fp);
+        module.__module_name__ = file.replace(".js", "")
         console.log("Loaded:", fp);
         if (typeof module.init === "function") {
             await module.init();
@@ -58,6 +65,7 @@ async function Game_Loop() {
     }
     console.log("All scripts have loaded!")
 
+    console.log("Waiting for all players to connect...")
     //wait for all users to be ready
     await new Promise((resolve) => {
         const check = () => {
@@ -71,14 +79,32 @@ async function Game_Loop() {
         }
         check()
     })
+    console.log("All players connected!")
 
-    Object.values(users_connections).forEach(user => {
+    console.log("Loading all ui scripts...")
+    const ui_scripts = (await Promise.all(scripts.map(async s => {
+        if (typeof s.ui_script == "function") {
+            return s.ui_script.toString().replace("function ui_script(", `function ${s.__module_name__}_ui_script(`)
+        }
+        return null
+    }))).filter(s => s != null)
+    console.log("All ui scripts loaded!")
+
+    console.log("Sending players ui scripts...")
+    Object.values(users_connections).forEach( user => {
         user.channel.send(JSON.stringify({
-            Game_Start:true
-            //FIXME: send game ui logic over the connection so the user can load it.
+            Game_Start:true,
+            Setup: Ui_Setup.toString(),
+            Scripts: ui_scripts
         }))
     })
+    console.log("Sent all ui scripts!")
 
+    console.log("Waiting for all client ui scripts to finish...")
+    //FIXME: wait for ui scripts to finish on all clients
+    console.log("All client ui scripts done!")
+
+    console.log("Entered pre-game state...")
     const internal_tick = async () => {
         const tick_start = Date.now()
         global.tick_index += 1
@@ -87,8 +113,6 @@ async function Game_Loop() {
                 if (typeof script.tick == "function") {
                     await script.tick()
                 }
-
-                if (script._render_to_file) script._render_to_file("./out.bmp")
             }
         }
         catch (e) {

@@ -20,11 +20,11 @@ class Color {
     }
 
     get a() {
-        return this._Apply_Filter(this._a, this.filters?.a)
+        return this._Apply_Filter(this._a, this.filter?.a)
     }
     
     _Apply_Filter(value, filter) {
-        return value + (filter || 0)
+        return (filter ?? value)
     }
 
     static From_HSLA(h, s, l, a) {
@@ -116,6 +116,50 @@ class Color {
     }
 }
 
+class Network_Handler {
+    constructor(connections) {
+        this.raw = Object.values(connections)
+        this.connections = connections
+        this._on_messages = []
+
+        Object.keys(connections).forEach(user => {
+            const connection = connections[user]
+
+            connection.addEventListener("message", (event) => {
+                event.owner = user
+                this._on_messages.forEach(handler => {
+                    handler(event)
+                })
+            })
+        })
+    }
+
+    Send_All(data) {
+        this.raw.forEach(c => {
+            this._send(c, data)
+        })
+    }
+
+    Send_User(data, user) {
+        this._send(this.connections[user], data)
+    }
+
+    _send(socket, msg) {
+        var msg_safe_data = data
+        if (typeof data == "object") {
+            msg_safe_data = JSON.stringify(data)
+        }
+        else if (typeof data != "string") {
+            msg_safe_data = `${data}`
+        }
+        socket.channel.send(msg_safe_data)
+    }
+
+    on_message(callback) {
+        this._on_messages.push(callback)
+    }
+}
+
 const engine = {
     version: {
         name: "1.0.0",
@@ -129,6 +173,7 @@ const engine = {
     game_settings: {
     },
     tick_rate: 0,
+    network: new Network_Handler(global.user_connections),
 
     public: {
         // put any values you wish to share with other packages here
@@ -189,6 +234,9 @@ const engine = {
         if (!valid_version) throw `Package '${package_name}' is version '${real_version}'. Requested version '${package_version}'`
 
         return global.engine_store[package_name].engine.public
+    },
+    Chance(num) {
+        return Math.random() * 100 < num
     },
 
     color: Color

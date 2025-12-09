@@ -131,11 +131,12 @@ class Map_Handler {
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const pixel = this.raw[y][x];
+                const [r, g, b, a] = pixel.rgba
                 
-                data[idx++] = pixel.r;
-                data[idx++] = pixel.g;
-                data[idx++] = pixel.b;
-                data[idx++] = pixel.a;
+                data[idx++] = r;
+                data[idx++] = g;
+                data[idx++] = b;
+                data[idx++] = a;
             }
         }
 
@@ -151,10 +152,111 @@ class Map_Handler {
 }
 
 class Territory_Manager {
-    constructor (land, territory) {
+    land;
+    territory;
+    color;
+
+    constructor (land, territory, troops) {
+        land = land.filter(pixel => pixel.owner != "void")
         this.land = land
         this.territory = territory
+        this.troops = troops
         this.color = engine.public.territories[territory].color
+        this.attacking_progress = {}
+        
+        land.forEach(pixel => {
+            if (pixel.owner != "void") {
+                pixel.filter = this.color
+                pixel.owner = this.territory
+            }
+        })
+
+        engine.public.territory_objects[territory] = this
+    }
+
+    get borders() {
+        const borders = [];
+        for (var pixel of this.land) {
+            for (var neighbor of pixel.neighbors) {
+                if (neighbor.owner != this.territory) {
+                    borders.push(neighbor)
+                }
+            }
+        }
+        return borders
+    }
+
+    Claim_Land(x, y) {
+        const pixel = engine.public.map.get(x,y)
+        if (pixel.owner != "void") {
+            pixel.filter = this.color
+            pixel.owner = this.territory
+            this.land.push(pixel)
+            return true
+        }
+        return false
+    }
+
+    bordering(territory) {
+        for (var pixel of this.land) {
+            for (var neighbor of pixel.neighbors) {
+                if (neighbor.owner == territory) {
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
+    attack(territory, troop_percent) {
+        const troop_count = Math.floor(this.troops * (troop_percent / 100))
+        this.troops -= troop_count
+        if (this.attacking_progress[territory]) {
+            this.attacking_progress[territory] += troop_count
+        }
+        else {
+            this.attacking_progress[territory] = troop_count
+        }
+    }
+
+    attacking(territory) {
+        return this.attacking_progress[territory] ? true : false
+    }
+
+    _tick() {
+        const max_troops = this.land.length * engine.public.settings.territory_value
+        const troop_percent = this.troops / max_troops
+        const bordering = this.borders
+        Object.entries(this.attacking_progress).forEach(([territory, troops]) => {
+            console.log(this.territory, ">", territory, troops)
+
+            if (!this.bordering(territory)) {
+                this.troops = Math.min(max_troops, this.troops + troops)
+                troops = 0
+            }
+            if (troops <= 0) {
+                delete this.attacking_progress[territory]
+                return
+            }
+            bordering.forEach(pixel => {
+                //TODO: update to make troop count effect it
+                if (pixel.owner == territory && troops > 0) {
+                    troops--
+                    if (engine.Chance(troops / (max_troops / 6) * 100)) {
+                        this.Claim_Land(pixel.x, pixel.y)
+                    }
+                }
+            })
+            
+            this.attacking_progress[territory] = troops
+        })
+
+        const [a,b,c,x] = [1,2.5,1,troop_percent*5]
+        this.troops += Math.pow(a*2.718, -(Math.pow(x-b, 2) / 2 * Math.pow(c, 2)))
+            * (max_troops * engine.public.settings.troop_gain_rate)
+
+        this.troops = Math.min(max_troops, this.troops)
     }
 }
 
@@ -206,7 +308,7 @@ function Register_Territory(name) {
     return id
 }
 
-export function _render_to_file(fp) {
+function _render_to_file(fp) {
     const data = engine.public.map._dump_bmp()
     fs.writeFileSync(fp, data.data)
 }
@@ -215,10 +317,18 @@ export function tick() {
     if (global.tick_duration > (1000 / engine.tick_rate) * 0.8) {
         console.warn("Warning! tick duration is abnormaly high!")
     }
+
+    Object.values(engine.public.territory_objects).forEach(TM => TM._tick())
+
+    _render_to_file("./out.bmp")
 }
 
 export function init() {
     engine.public.map = new Map_Handler(engine.public.settings.map)
+}
+
+export function ui_script() {
+
 }
 
 engine.public = {
@@ -226,8 +336,11 @@ engine.public = {
         map: "basic",
         bots:true,
         bot_count:10,
+        troop_gain_rate: 0.05,
+        territory_value: 4 // the number of troops to alow per-space.
     },
     territories:{},
+    territory_objects:{},
 
     Register_Territory,
 
