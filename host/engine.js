@@ -1,3 +1,41 @@
+//#region array.prototype.equals
+// Source - https://stackoverflow.com/a
+// Posted by Tomáš Zato, modified by community. See post 'Timeline' for change history
+// Retrieved 2025-12-14, License - CC BY-SA 4.0
+
+// Warn if overriding existing method
+if(Array.prototype.equals)
+    console.warn("Overriding existing Array.prototype.equals. Possible causes: New API defines the method, there's a framework conflict or you've got double inclusions in your code.");
+// attach the .equals method to Array's prototype to call it on any array
+Array.prototype.equals = function (array) {
+    // if the other array is a falsy value, return
+    if (!array)
+        return false;
+    // if the argument is the same array, we can be sure the contents are same as well
+    if(array === this)
+        return true;
+    // compare lengths - can save a lot of time 
+    if (this.length != array.length)
+        return false;
+
+    for (var i = 0, l=this.length; i < l; i++) {
+        // Check if we have nested arrays
+        if (this[i] instanceof Array && array[i] instanceof Array) {
+            // recurse into the nested arrays
+            if (!this[i].equals(array[i]))
+                return false;       
+        }           
+        else if (this[i] != array[i]) { 
+            // Warning - two different object instances will never be equal: {x:20} != {x:20}
+            return false;   
+        }           
+    }       
+    return true;
+}
+// Hide method from for-in loops
+Object.defineProperty(Array.prototype, "equals", {enumerable: false});
+//#endregion
+
 class Color {
     constructor(r, g, b, a) {
         this._r = r
@@ -117,46 +155,37 @@ class Color {
 }
 
 class Network_Handler {
-    constructor(connections) {
-        this.raw = Object.values(connections)
-        this.connections = connections
-        this._on_messages = []
+    _message_buffer = {
 
-        Object.keys(connections).forEach(user => {
-            const connection = connections[user]
+    }
+    network_name = null
 
-            connection.addEventListener("message", (event) => {
-                event.owner = user
-                this._on_messages.forEach(handler => {
-                    handler(event)
-                })
-            })
-        })
+    constructor(users) {
+        this.users = users
+        global.network_handlers.push(this)
     }
 
     Send_All(data) {
-        this.raw.forEach(c => {
-            this._send(c, data)
+        this.users.forEach(user => {
+            this.Send_User(data, user)
         })
     }
 
     Send_User(data, user) {
-        this._send(this.connections[user], data)
+        if (!engine.network_name) {
+            throw "engine.network_name is null, Please set this to a uniqe id."
+        }
+        this.network_name = engine.network_name
+
+        if (!this._message_buffer[user]) {
+            this._message_buffer[user] = []
+        }
+
+        this._message_buffer[user].push(data)
     }
 
-    _send(socket, msg) {
-        var msg_safe_data = data
-        if (typeof data == "object") {
-            msg_safe_data = JSON.stringify(data)
-        }
-        else if (typeof data != "string") {
-            msg_safe_data = `${data}`
-        }
-        socket.channel.send(msg_safe_data)
-    }
+    On_Message(callback) {
 
-    on_message(callback) {
-        this._on_messages.push(callback)
     }
 }
 
@@ -173,7 +202,8 @@ const engine = {
     game_settings: {
     },
     tick_rate: 0,
-    network: new Network_Handler(global.user_connections),
+    network: new Network_Handler(Object.keys(global.users_connections)),
+    network_name: null,
 
     public: {
         // put any values you wish to share with other packages here
@@ -238,12 +268,14 @@ const engine = {
     Chance(num) {
         return Math.random() * 100 < num
     },
+    Random_entry(list) {
+        return list[Math.round(Math.random() * list.length)]
+    },
 
     color: Color
 }
 
 engine.users = global.users
-engine.user_connections = global.users_connections
 engine.game_settings = global.Game_Settings
 engine.tick_rate = global.Game_Settings.tick_rate
 

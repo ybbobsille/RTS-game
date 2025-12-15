@@ -30,7 +30,6 @@ var Base64 = {
 };
 
 const log = (msg) => {
-    console.log("signal:", msg)
     document.getElementById("log").value += msg + "\n";
 };
 
@@ -67,3 +66,14 @@ function Connect(code) {
         socket.send(JSON.stringify({register_user:true}))
     }
 }
+
+const state_update = setInterval(() => {
+    const state = document.getElementById("State")
+    if (!state) clearInterval(state_update)
+    state.innerHTML = `
+    Status:
+    Signal socket: ${window.socket?.readyState}
+    ICE: ${globalThis.pc?.iceConnectionState}
+    RTC Channel: ${globalThis.channel?.readyState}
+    `.replace(/\n/g, "<br>")
+}, 100)

@@ -2,6 +2,7 @@ import engine from "../engine.js"
 import bmp from "bmp-js"
 import fs from "fs"
 engine.Register("Main", "1.0.0")
+engine.network_name = "ybbobsille_main_12/14/2025"
 engine.Vcheck("1.0.0")
 
 class Map_Pixel extends engine.color {
@@ -12,6 +13,7 @@ class Map_Pixel extends engine.color {
         this.map = map
 
         this.owner = r + g + b + a == 0 ? "void" : "wild"
+        this.history = [0, 0, 0, 0]
     }
 
     get pos() {
@@ -42,6 +44,14 @@ class Map_Pixel extends engine.color {
             this.left
         ]
     }
+
+    get changed() {
+        return !this.rgba.equals(this.history)
+    }
+
+    Flush_Changes() {
+        this.history = this.rgba
+    }
 }
 
 class Map_Handler {
@@ -49,8 +59,19 @@ class Map_Handler {
 
     constructor(name) {
         this.raw = this._read_bmp(`./maps/${name}.bmp`)
+        this.flat = [];
+        this.land = []
         this.height = this.raw[0].length
         this.width = this.raw.length
+
+        this.raw.forEach(row => {
+            row.forEach(p => this.flat.push(p))
+        })
+        this.flat.forEach(pixel => {
+            if (pixel.owner != "void") {
+                this.land.push(pixel)
+            }
+        })
     }
 
     get size() {
@@ -97,6 +118,24 @@ class Map_Handler {
         return this.raw[Math.round(x)][Math.round(y)]
     }
 
+    Dump_Raw() {
+        const height = this.raw.length;
+        const width = this.raw[0].length;
+
+        const data = [];
+
+        for (let x = 0; x < width; x++) {
+            data[x] = []
+            for (let y = 0; y < height; y++) {
+                const pixel = this.raw[y][x];
+                const [r, g, b, a] = pixel.rgba
+                data[x][y] = pixel.rgba
+            }
+        }
+
+        return data
+    }
+
     _read_bmp(file) {
         const bmpBuffer = fs.readFileSync(file);
         const bmpData = bmp.decode(bmpBuffer);
@@ -109,9 +148,9 @@ class Map_Handler {
         for (let x = 0; x < width; x++) {
             const row = [];
             for (let y = 0; y < width; y++) {
+                const b = data[idx++];
                 const r = data[idx++];
                 const g = data[idx++];
-                const b = data[idx++];
                 const a = data[idx++];
 
                 row.push(new Map_Pixel(x, y, r, g, b, a, this));
@@ -133,9 +172,9 @@ class Map_Handler {
                 const pixel = this.raw[y][x];
                 const [r, g, b, a] = pixel.rgba
                 
+                data[idx++] = b;
                 data[idx++] = r;
                 data[idx++] = g;
-                data[idx++] = b;
                 data[idx++] = a;
             }
         }
@@ -149,6 +188,23 @@ class Map_Handler {
         const bmpBuffer = bmp.encode(rawData);
         return bmpBuffer
     }
+
+    Find_Changes(max_changes) {
+        var changes = [];
+        //FIXME: make pixels report chaged to the map_handler to void checking every land pixel
+        this.land.forEach(pixel => {
+                if (pixel.changed) {
+                    changes.push(pixel)
+                }
+            })
+
+        changes = changes.splice(0, max_changes)
+        changes.forEach(pixel => pixel.Flush_Changes())
+
+        return changes.map(pixel => {
+            return [pixel.x, pixel.y, ...pixel.rgba]
+        })
+    }
 }
 
 class Territory_Manager {
@@ -161,8 +217,10 @@ class Territory_Manager {
         this.land = land
         this.territory = territory
         this.troops = troops
+        this.money = engine.public.settings.starting_money
         this.color = engine.public.territories[territory].color
         this.attacking_progress = {}
+        this.dead = false
         
         land.forEach(pixel => {
             if (pixel.owner != "void") {
@@ -172,6 +230,17 @@ class Territory_Manager {
         })
 
         engine.public.territory_objects[territory] = this
+    }
+
+    get neighbors() {
+        const borders = this.borders
+        const territories = []
+        borders.forEach(pixel => {
+            if (!territories.includes(pixel.owner)) {
+                territories.push(pixel.owner)
+            }
+        })
+        return territories
     }
 
     get borders() {
@@ -189,9 +258,29 @@ class Territory_Manager {
     Claim_Land(x, y) {
         const pixel = engine.public.map.get(x,y)
         if (pixel.owner != "void") {
+            if (pixel.owner != "wild") {
+                const owner = engine.public.territory_objects[pixel.owner]
+                const index = owner.land.indexOf(pixel)
+                if (index != -1) {
+                    owner.land.splice(index, 1)
+                }
+                if (owner.land.length == 0) {
+                    this.money += owner.money
+                    owner.money = 0
+                    owner.troops = 0
+                    owner.dead = true
+                    console.log(
+                        engine.public.territories[owner.territory].name,
+                        "died to",
+                        engine.public.territories[this.territory].name
+                    )
+                }
+            }
+
             pixel.filter = this.color
             pixel.owner = this.territory
             this.land.push(pixel)
+            
             return true
         }
         return false
@@ -229,7 +318,7 @@ class Territory_Manager {
         const troop_percent = this.troops / max_troops
         const bordering = this.borders
         Object.entries(this.attacking_progress).forEach(([territory, troops]) => {
-            console.log(this.territory, ">", territory, troops)
+            //console.log(this.territory, ">", territory, troops)
 
             if (!this.bordering(territory)) {
                 this.troops = Math.min(max_troops, this.troops + troops)
@@ -244,6 +333,8 @@ class Territory_Manager {
                 if (pixel.owner == territory && troops > 0) {
                     troops--
                     if (engine.Chance(troops / (max_troops / 6) * 100)) {
+                        if (pixel.owner != "wild") troops -= Math.floor(((engine.public.territory_objects[pixel.owner]?.troops || 0) * engine.public.settings.attacking_cost) / this.troops)
+                    
                         this.Claim_Land(pixel.x, pixel.y)
                     }
                 }
@@ -257,6 +348,7 @@ class Territory_Manager {
             * (max_troops * engine.public.settings.troop_gain_rate)
 
         this.troops = Math.min(max_troops, this.troops)
+        this.money += Math.floor(this.troops * engine.public.settings.troop_income)
     }
 }
 
@@ -317,18 +409,55 @@ export function tick() {
     if (global.tick_duration > (1000 / engine.tick_rate) * 0.8) {
         console.warn("Warning! tick duration is abnormaly high!")
     }
-
+    fs.writeFileSync("./tick_duration.txt", `${global.tick_duration} (${Math.round(global.tick_duration / (1000 / engine.tick_rate) * 100)}%)`)
+    
     Object.values(engine.public.territory_objects).forEach(TM => TM._tick())
 
-    _render_to_file("./out.bmp")
+    engine.network.Send_All({
+        type: "map_update",
+        data: engine.public.map.Find_Changes(5000)
+    })
+
+    //_render_to_file("./out.bmp")
+
+    if (engine.Tick_Index() % (global.Game_Settings.tick_rate * 30) == 0) {
+        // refresh the map buffer every 30 seconds
+        //console.log("Refreshing map buffer...")
+        engine.public.map.flat.forEach(pixel => {
+            pixel.history = null
+        })
+    }
 }
 
 export function init() {
     engine.public.map = new Map_Handler(engine.public.settings.map)
+    engine.network.Send_All({
+        type: "map_data",
+        data: {
+            size: engine.public.map.size
+        }
+    })
 }
 
-export function ui_script() {
-
+export function ui_script(handler) {
+    handler.network.on_message("ybbobsille_main_12/14/2025", (msg) => {
+        switch (msg.type) {
+            case "map_data":
+                handler.renderer.Size(msg.data.size[0], msg.data.size[1])
+                handler.renderer.Set_Square(0,0, msg.data.size[0], msg.data.size[1], 0,0,0)
+                break;
+            case "map_update":
+                msg.data.forEach(([x,y,r,g,b,a]) => {
+                    if (x === 100 && y === 100) {
+        console.log("Pixel 100,100:", r, g, b, a);
+    }
+                    handler.renderer.Set_Pixel(x,y,r,g,b)
+                })
+                break
+            default:
+                break;
+        }
+    })
 }
 
 engine.public = {
@@ -337,10 +466,15 @@ engine.public = {
         bots:true,
         bot_count:10,
         troop_gain_rate: 0.05,
-        territory_value: 4 // the number of troops to alow per-space.
+        territory_value: 4, // the number of troops to alow per-space.
+        attacking_cost: 8,
+        troop_income: 0.01, // the amount of money to get every tick for every troop 
+        starting_money: 5000
     },
     territories:{},
     territory_objects:{},
+
+    map: null,
 
     Register_Territory,
 

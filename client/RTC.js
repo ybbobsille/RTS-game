@@ -1,21 +1,33 @@
-async function Handle_RTC_Data(event) {
+function Get_Function_From_String(func_string) {
+  var test = null
+  eval(`test = ${func_string}`)
+  return test
+}
+
+async function Handle_Game_Init(event) {
   RTC_log(event.data)
+  const data = JSON.parse(event.data)
+
+  if (data.Game_Start) {
+    Get_Function_From_String(data.Setup)(data.Scripts)
+  }
 }
 
 async function Connect_To_Host(socket) {
     const pc = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     });
-    pc.oniceconnectionstatechange = () =>
-      RTC_log("ICE: " + pc.iceConnectionState);
+    pc.oniceconnectionstatechange = () => {
+      log("ICE: " + pc.iceConnectionState);
+    }
     globalThis.pc = pc
     pc.ondatachannel = (event) => {
       const channel = event.channel;
       globalThis.channel = channel; // expose for console testing
-      channel.onmessage = Handle_RTC_Data;
+      channel.onmessage = Handle_Game_Init;
       socket.close()
 
-      RTC_log("Client DataChannel Ready: " + channel.readyState);
+      log("Client DataChannel Ready: " + channel.readyState);
     };
 
     pc.onicecandidate = (event) => {
@@ -33,7 +45,7 @@ async function Connect_To_Host(socket) {
     };
     socket.onmessage = async (event) => {
         const msg = JSON.parse(event.data);
-        RTC_log("Signal:" + JSON.stringify(msg))
+        log("Signal:" + JSON.stringify(msg))
 
         if (msg.RTC) {
             if (msg.RTC.offer) {
@@ -60,6 +72,7 @@ async function Connect_To_Host(socket) {
 }
 
 function RTC_log(msg) {
-    console.log("RTC:", msg)
-    document.getElementById("RTClog").value += msg + "\n";
+  const box = document.getElementById("RTClog")
+  if (!box) return
+  box.value += msg + "\n";
 }

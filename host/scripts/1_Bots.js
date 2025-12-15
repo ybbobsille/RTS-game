@@ -1,4 +1,3 @@
-import { config } from "node:process"
 import engine from "../engine.js"
 engine.Vcheck("1.0.0")
 const { Main } = engine.Register("Bots", "1.0.0", {"Main":"1.0.0"})
@@ -39,9 +38,10 @@ const bot_config = {
     General: {
         // how much the bot will respect players/bots
         // this will effect how much the bots will alliance/attack players/bots
+        // NOTE: respect.player is cot currently used
         respect: {
             player: 0.8,
-            bot: 0.6
+            bot: 0.8 
         },
         // this is how much deviation to have in the respect (chosen at game start for each bot)
         // the respect for bots and players will be limited between 1 and 0
@@ -52,6 +52,14 @@ const bot_config = {
         // how patience the bot will be, so lower means more urgency to: gain land, spread out, etc. (limited to 0-1)
         patience: 0.5,
         patience_deviation: 0.4
+    },
+    // related to the 'early' phase of the game
+    Early: {
+        Attack_Chance: 0.1,
+        // the chance that the bot will change targets
+        Focus_Switch: 0.2,
+        // the amount of money to move from 'early' to 'main' phase
+        Required_Money: 100000
     }
 }
 
@@ -146,6 +154,14 @@ class Bot_Handler {
     }
 
     async Tick_Game() {
+        if (this.land?.dead) {
+            // remove bot from update pool
+            const index = bots.indexOf(this)
+            if (index != -1) {
+                bots.splice(index, 1)
+            }
+            return
+        }
         if (this.current_location) {
             //clean up starting data and init game data
             this.land = new Main.Territory_Manager(this.selected_pixels, this.territory, bot_config.start.troop_count)
@@ -164,12 +180,109 @@ class Bot_Handler {
             this.patience = bot_config.General.patience + calculate_deviation(bot_config.General.patience_deviation)
         }
 
+        const calc_neighbor_threat = () => {
+            const bordering_terr = this.land.neighbors.filter(t => t != "void")
+            
+            const sizes = bordering_terr.map(tn => 
+                Main.territory_objects[tn]?.land?.length
+            )
+            const my_size = this.land.land.length
+            const low = Math.min(...sizes, my_size)
+            const high = Math.max(...sizes, my_size) - low
+            const scores = sizes.map(s => (s - low) / high)
+            const my_score = (my_size - low) / high
+
+            const attack_candidates = Object.fromEntries(scores.map(s => 
+                    [bordering_terr[scores.indexOf(s)], 1 - s]
+                ))
+            return [attack_candidates, my_score]
+        }
+
         if (this.phase == "initial") {
+            //this phase is purely just claim land. it will move the 'early' phase if there is no wild to claim.
+
             if (this.land.bordering("wild")) {
                 if (!this.land.attacking("wild") && engine.Chance(this.patience * 30)) this.land.attack("wild", 20)
             }
             else {
-                this.phase == "early"
+                this.phase = "early"
+                this.focusless = 0
+            }
+        }
+        else if (this.phase == "early") {
+            // this phase mainly about getting land from others.
+            
+            if (!this.focus) {
+                const [threats, my_score] = calc_neighbor_threat()
+                if (Object.keys(threats).length == 0) {
+                    this.phase = "main"
+                    return 
+                }
+                const attack_candidates = Object.fromEntries(
+                    Object.entries(threats).filter(e => 
+                        e[1] * this.respect.bot > my_score || this.focusless > 30
+                    )
+                )
+                
+                for (var n of Object.keys(attack_candidates)) {
+                    if (engine.Chance(50 + (45 * attack_candidates[n]) + (this.focusless / 2)) || this.focusless > 100) {
+                        this.focus = n
+                        this.focus_strength = attack_candidates[n]
+                        break
+                    }
+                }
+                if (!this.focus) {
+                    // just pick a random one if all else fails
+                    const target = Object.entries(attack_candidates)[0]
+                    if (!target) {
+                        this.focusless += 1
+                        return
+                    }
+                    
+                    this.focus = target[0]
+                    this.focus_strength = target[1]
+                }
+            }
+            else {
+                this.focusless = 0
+            }
+
+            if (this.focus) {
+                if (engine.Chance(bot_config.Early.Attack_Chance * this.patience * 100)) {
+                    if (!this.land.attacking(this.focus)) {
+                        this.land.attack(this.focus, 20)
+                    } 
+                }
+                else if (!this.land.attacking(this.focus) && engine.Chance(bot_config.Early.Focus_Switch * 100)) {
+                    this.focus = null
+                }
+            }
+
+            if (this.land.money >= bot_config.Early.Required_Money) {
+                this.phase = "main"
+            }
+        }
+        else if (this.phase == "main") {
+            if (this._new_main_phase != true) {
+                this._new_main_phase = true
+                this.focus = null
+                console.log(this.name, "is in main phase")
+            }
+
+            const [threats, my_score] = calc_neighbor_threat()
+            
+            Object.keys(threats).forEach(tn => {
+                threats[tn] = {
+                    score: threats[tn],
+                    attacking: Main.territory_objects[tn].attacking(this.territory)
+                }
+            })
+
+            for (var tn of Object.keys(threats)) {
+                if (threats[tn].attacking && !this.land.attacking(tn)) {
+                    this.land.attack(tn, 20)
+                    break;
+                }
             }
         }
     }

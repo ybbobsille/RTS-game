@@ -37,10 +37,75 @@ var room_id = null
 const users = []
 const users_connections = {}
 
-function Ui_Setup() {
+function Ui_Setup(ui_scripts) {
     // this function will run on the client and will setup the system to allow each script to use there own scripts.
     // the reason i do it this way is to alow old clients to load new games.
+    console.log("running Ui_Setup...")
 
+    Object.entries(ui_scripts).forEach(([module_name, func]) => {
+        ui_scripts[module_name] = Get_Function_From_String(func)
+    })
+    const RTC = globalThis.pc
+    const channel = globalThis.channel
+
+    const channel_listeners = {}
+
+    channel.onmessage = (event) => {
+        const data = JSON.parse(event.data)
+        for (var network_name of Object.keys(data)) {
+            if (!channel_listeners[network_name]) continue
+
+            data[network_name].forEach(msg => 
+                channel_listeners[network_name].forEach(listener => listener(msg))
+            )
+        }
+    }
+
+    document.body.innerHTML = `
+    <style>
+    body {
+        margin: 0;
+    }
+
+    canvas {
+        border: 2px solid black;
+    }
+    </style>
+
+    <canvas width="500" height="500">
+    </canvas>
+    `
+
+    const canvas = document.querySelector("canvas")
+    const ctx = canvas.getContext("2d")
+
+    const handler = {
+        renderer: {
+            Set_Pixel(x, y, r, g, b) {
+                handler.renderer.Set_Square(x,y,1,1,r,g,b)
+            },
+            Set_Square(x,y,w,h,r,g,b) {
+                ctx.fillStyle = `rgb(${[r,g,b].join(",")})`
+                ctx.fillRect(y,x,w,h)
+                ctx.stroke()
+            },
+            Size(x,y) {
+                canvas.height = y
+                canvas.width = x
+            }
+        },
+        network: {
+            on_message(network_name, callback) {
+                if (!channel_listeners[network_name]) channel_listeners[network_name] = []
+
+                channel_listeners[network_name].push(callback)
+            }
+        }
+    }
+
+    Object.values(ui_scripts).forEach(script => {
+        script(handler)
+    })
 }
 
 async function Game_Loop() {
@@ -49,6 +114,7 @@ async function Game_Loop() {
     global.users = users
     global.users_connections = users_connections
     global.engine_store = {}
+    global.network_handlers = []
     console.log("Loading scripts...")
     var files = fs.readdirSync("./scripts")
     console.log("Scripts found:", files.join(", "))
@@ -56,12 +122,11 @@ async function Game_Loop() {
     for (var file of files) {
         const fp = "./scripts/" + file
         const module = await import(fp);
-        module.__module_name__ = file.replace(".js", "")
         console.log("Loaded:", fp);
         if (typeof module.init === "function") {
             await module.init();
         }
-        scripts.push(module)
+        scripts[file.replace(".js", "")] = module
     }
     console.log("All scripts have loaded!")
 
@@ -82,12 +147,12 @@ async function Game_Loop() {
     console.log("All players connected!")
 
     console.log("Loading all ui scripts...")
-    const ui_scripts = (await Promise.all(scripts.map(async s => {
-        if (typeof s.ui_script == "function") {
-            return s.ui_script.toString().replace("function ui_script(", `function ${s.__module_name__}_ui_script(`)
+    const ui_scripts = {}
+    Object.entries(scripts).forEach(([__module_name__, script]) => {
+        if (typeof script.ui_script == "function") {
+            ui_scripts[__module_name__] = script.ui_script.toString()
         }
-        return null
-    }))).filter(s => s != null)
+    })
     console.log("All ui scripts loaded!")
 
     console.log("Sending players ui scripts...")
@@ -104,14 +169,51 @@ async function Game_Loop() {
     //FIXME: wait for ui scripts to finish on all clients
     console.log("All client ui scripts done!")
 
+    Object.values(global.users_connections).forEach(s => {
+        s.channel.onclose = (e) => {
+            console.error("closed", e)
+        }
+    })
+
     console.log("Entered pre-game state...")
     const internal_tick = async () => {
         const tick_start = Date.now()
         global.tick_index += 1
         try {
-            for (var script of scripts) {
+            for (var script of Object.values(scripts)) {
                 if (typeof script.tick == "function") {
                     await script.tick()
+                }
+            }
+        }
+        catch (e) {
+            console.log(e)
+        }
+        try {
+            const message = {}
+            for (var handler of global.network_handlers) {
+                if (!handler.network_name) continue // handler is yet to send a message
+                
+                for (var uid of Object.keys(handler._message_buffer)) {
+                    if (!message[uid]) message[uid] = {}
+
+                    message[uid][handler.network_name] = [...(message[uid][handler.network_name] || []), ...handler._message_buffer[uid]]
+                }
+                handler._message_buffer = {}
+            }
+
+            for (var uid of Object.keys(message)) {
+                const data = message[uid]
+                const socket = global.users_connections[uid]
+                if (!socket) {
+                    console.warn("Unknown user id of", uid, "Available user ids include:", Object.keys(global.users_connections).join(", "))
+                }
+                try {
+                    socket.channel.send(JSON.stringify(data))
+                }
+                catch (e) {
+                    console.log(socket.channel.readyState)
+                    //console.log(e)
                 }
             }
         }
@@ -146,11 +248,11 @@ async function Connect_To_User(user_id, socket) {
     users_connections[user_id].channel = channel;
 
     pc.oniceconnectionstatechange = () => {
-      console.log("ICE:", user_id, pc.iceConnectionState);
-      users_connections[user_id].status = pc.iceConnectionState == "connected"
+      users_connections[user_id].status = pc.iceConnectionState == "completed"
 
-      if (pc.iceConnectionState == "connected") {
+      if (pc.iceConnectionState == "completed") {
         socket.close()
+        console.log("Player", user_id, "is ready!")
       }
     }
 
@@ -208,6 +310,14 @@ function Handle_Answer(code) {
 function start({ ip, port }) {
     console.log(`Connecting to ${ip}:${port}`)
     const socket = new WebSocket(`ws:${ip}:${port}`)
+    const Start_Game = () => {
+        console.log("Starting game...")
+        users.forEach(user_id => {
+            Connect_To_User(user_id, socket)
+        })
+        Game_Loop()
+    }
+
     socket.on("message", async (event) => {
         const msg = JSON.parse(event)
 
@@ -217,16 +327,16 @@ function start({ ip, port }) {
         if (msg.user_joined) {
             console.log("New user:", msg.user_joined)
             users.push(msg.user_joined)
+
+            //FIXME: temp
+            Start_Game()
         }
         if (msg.host_confirmed) {
             console.log("Hosting game with room id:", msg.host_confirmed)
             room_id = msg.host_confirmed
         }
         if (msg._TEMP_start_room) {
-            users.forEach(user_id => {
-                Connect_To_User(user_id, socket)
-            })
-            Game_Loop()
+            Start_Game()
         }
     })
 
@@ -240,9 +350,9 @@ global.Game_Settings = {
     tick_rate:10
 }
 
-Game_Loop()
-    .catch(e => console.error(e))
-//start(Handle_Answer("B/-A-A-B_IAIA"))
+//Game_Loop()
+//    .catch(e => console.error(e))
+start(Handle_Answer("B/-A-A-B_IAIA"))
 //const rl = readline.createInterface({
 //    input: process.stdin,
 //    output: process.stdout,
